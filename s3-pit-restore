@@ -107,9 +107,14 @@ class TestS3PitRestore(unittest.TestCase):
         page_iterator = paginator.paginate(Bucket=args.bucket, Prefix=base_path)
         with concurrent.futures.ThreadPoolExecutor(args.max_workers) as e:
             for page in page_iterator:
-               delete_keys = {'Objects' : []}
-               delete_keys['Objects'] = [{'Key' : k} for k in [obj['Key'] for obj in page.get('Contents', [])]]
-               e.submit(resource.meta.client.delete_objects(Bucket=args.bucket, Delete=delete_keys))
+                delete_keys = {
+                    'Objects': [
+                        {'Key': k}
+                        for k in [obj['Key'] for obj in page.get('Contents', [])]
+                    ]
+                }
+
+                e.submit(resource.meta.client.delete_objects(Bucket=args.bucket, Delete=delete_keys))
 
     def remove_tree(self, path):
         if os.path.exists(path) and os.path.isdir(path):
@@ -193,10 +198,13 @@ def print_obj(obj, optional_message=""):
         print(obj["Key"])
 
 def handled_by_glacier(obj):
-    if (obj["StorageClass"] == "DEEP_ARCHIVE" or obj["StorageClass"] == "GLACIER") and not args.enable_glacier:
+    if (
+        obj["StorageClass"] in ["DEEP_ARCHIVE", "GLACIER"]
+        and not args.enable_glacier
+    ):
         print_obj(obj, optional_message='needs restore')
         return True
-    elif (obj["StorageClass"] == "DEEP_ARCHIVE" or obj["StorageClass"] == "GLACIER") and args.enable_glacier:
+    elif obj["StorageClass"] in ["DEEP_ARCHIVE", "GLACIER"]:
         s3 = boto3.resource('s3', endpoint_url=args.endpoint_url)
         s3_obj = s3.Object(args.bucket, obj["Key"])
         if s3_obj.restore is None:
@@ -291,9 +299,7 @@ def do_restore():
     global transfer
     transfer = boto3.s3.transfer.S3Transfer(client)
     dest = args.dest
-    last_obj = {}
-    last_obj["Key"] = ""
-
+    last_obj = {'Key': ''}
     if args.debug: boto3.set_stream_logger('botocore')
 
     global executor
@@ -313,7 +319,7 @@ def do_restore():
     # page they should (the one with the versioning markers for the same set of files)
     previous_deletemarkers = []
     for page in page_iterator:
-        if not "Versions" in page:
+        if "Versions" not in page:
             print("No versions matching criteria, exiting ...", file=sys.stderr)
             sys.exit(1)
         versions = page["Versions"]
